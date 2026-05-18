@@ -37,6 +37,3 @@ def process_ingredients(raw_inputs):
     processed_list.sort(key=lambda x: x['d_day'])
     
     return processed_list
-
-        print(f"❌ 테스트 실패: {e}")
-        print("코드를 다시 수정해 보세요.")
