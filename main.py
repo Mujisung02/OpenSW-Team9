@@ -1,7 +1,7 @@
 import os
 import sys
+import re
 import numpy as np
-import pandas as pd
 from datetime import datetime
 
 # ==========================================
@@ -74,29 +74,20 @@ class RecipeScorer:
         )
         return round(total_score, 2)
 
-
 # ==========================================
 # 4. 사용자 직접 입력 처리 및 추천 함수
 # ==========================================
 def recommend_by_user_input(user_fridge_dict, top_n=3):
-    """사용자가 직접 입력한 냉장고 재료 딕셔너리를 받아 비율을 계산하고 레시피를 추천합니다."""
-    
-    # ----------------------------------------------------
-    # [원본 코드 복구 구역] 사용자 입력 매핑 및 비율 분석 출력
-    # ----------------------------------------------------
     user_vector = np.zeros(len(INGREDIENTS))
 
     # 사용자 입력 매핑
     for ing_name, amount in user_fridge_dict.items():
         if ing_name in INGREDIENTS:
             idx = INGREDIENTS.index(ing_name)
-            # 입력값이 딕셔너리(유통기한 포함)일 경우 수량만 추출, 아니면 원래 숫자 사용
             qty = amount['quantity'] if isinstance(amount, dict) else amount
             user_vector[idx] = qty
         else:
-            print(
-                f"안내: '{ing_name}'은(는) 추천 기준 재료가 아니므로 비율 계산에서 제외됩니다."
-            )
+            print(f"안내: '{ing_name}'은(는) 추천 기준 재료가 아니므로 비율 계산에서 제외됩니다.")
 
     # 비율(가중치) 벡터로 변환
     total_amount = np.sum(user_vector)
@@ -107,15 +98,12 @@ def recommend_by_user_input(user_fridge_dict, top_n=3):
     user_ratio_vector = user_vector / total_amount
     user_ratio_vector = user_ratio_vector.reshape(1, -1)
 
-    # 결과 출력
     print("\n==== 입력 기반 재료 비율 분석 ====")
     for idx, ratio in enumerate(user_ratio_vector[0]):
         if ratio > 0:
             print(f"- {INGREDIENTS[idx]}: {ratio*100:.1f}%")
 
-    # ----------------------------------------------------
-    # [변경 구역] 코사인 유사도 -> 가중치 점수(RecipeScorer) 교체
-    # ----------------------------------------------------
+    # 가중치 점수 계산 (RecipeScorer)
     scorer = RecipeScorer()
     results = []
     
@@ -130,20 +118,142 @@ def recommend_by_user_input(user_fridge_dict, top_n=3):
     print(f"\n==== 맞춤 레시피 추천 TOP {top_n} ====")
     return top_recommendations
 
+# ==========================================
+# 5. 인터페이스 (UI) 클래스 구현
+# ==========================================
+class RecipeRecommenderCLI:
+    def __init__(self):
+        self.user_ingredients = {}
+
+    def clear_screen(self):
+        os.system('cls' if os.name == 'nt' else 'clear')
+
+    def display_header(self):
+        print("========================================")
+        print("      🍳 냉장고 파먹기 레시피 추천 🍳      ")
+        print("========================================")
+        print("[현재 냉장고 속 재료]")
+        
+        if not self.user_ingredients:
+            print("텅 비어있습니다. 재료를 추가해주세요.")
+        else:
+            print(f"{'재료명':<10} | {'수량/무게':<10} | {'유통기한'}")
+            print("-" * 40)
+            for name, info in self.user_ingredients.items():
+                print(f"{name:<10} | {info['amount']:<10} | {info['exp_date']}")
+        print("========================================")
+
+    def add_ingredient(self):
+        print("\n[새 재료 추가]")
+        print("취소하고 메인으로 돌아가려면 엔터를 누르세요.")
+        
+        while True:
+            name = input("\n1. 재료 이름 (예: 김치, 계란): ").strip()
+            if not name:
+                break
+                
+            amount = input("2. 양 (예: 500g, 2개): ").strip()
+            if not amount:
+                amount = "모름"
+                
+            while True:
+                exp_date = input("3. 유통기한 (YYYY-MM-DD 형식, 예: 2026-05-30): ").strip()
+                if not exp_date:
+                    exp_date = "기한 없음"
+                    break
+                
+                try:
+                    valid_date = datetime.strptime(exp_date, "%Y-%m-%d")
+                    exp_date = valid_date.strftime("%Y-%m-%d")
+                    break
+                except ValueError:
+                    print("[오류] 올바른 날짜 형식이 아닙니다. 다시 입력해주세요.")
+
+            self.user_ingredients[name] = {
+                "amount": amount,
+                "exp_date": exp_date
+            }
+            print(f"\n✅ [{name}] 등록 완료! (계속 추가하려면 다음 재료를 입력하세요)")
+            
+    def reset_ingredients(self):
+        self.user_ingredients.clear()
+        print("\n🗑️ 냉장고를 깨끗하게 비웠습니다!")
+        input("\n계속하려면 엔터를 누르세요...")
+
+    def show_recommendations(self):
+        print("\n[레시피 추천 결과]")
+        
+        if not self.user_ingredients:
+            print("먼저 냉장고에 재료를 입력해주세요!")
+            input("\n계속하려면 엔터를 누르세요...")
+            return
+
+        parsed_fridge = {}
+        today = datetime.now()
+
+        for name, info in self.user_ingredients.items():
+            # 1. 수량 파싱 (정규식으로 숫자 추출)
+            amount_str = info['amount']
+            numbers = re.findall(r'\d+\.?\d*', amount_str)
+            qty = float(numbers[0]) if numbers else 1.0
+            
+            # 2. 유통기한 파싱 및 남은 일수(days_left) 계산
+            exp_date_str = info['exp_date']
+            if exp_date_str == "기한 없음":
+                days_left = 999
+            else:
+                try:
+                    exp_date_obj = datetime.strptime(exp_date_str, "%Y-%m-%d")
+                    delta = exp_date_obj - today
+                    days_left = delta.days
+                except ValueError:
+                    days_left = 999
+                    
+            # 3. 새로운 로직에 맞는 딕셔너리 형태로 저장
+            parsed_fridge[name] = {
+                "quantity": qty,
+                "days_left": days_left
+            }
+
+        # 추천 로직 호출
+        results = recommend_by_user_input(parsed_fridge, top_n=3)
+
+        if results:
+            print("-" * 40)
+            for rank, (recipe, score) in enumerate(results, start=1):
+                print(f"{rank}위: {recipe} (가중치 점수: {score:.2f})")
+                
+        input("\n메인 메뉴로 돌아가려면 엔터를 누르세요...")
+
+    def run(self):
+        while True:
+            self.clear_screen()
+            self.display_header()
+            
+            print("1. 냉장고 재료 추가하기")
+            print("2. 내 냉장고 비우기")
+            print("3. 맞춤 레시피 추천받기")
+            print("4. 프로그램 실행 종료")
+            print("----------------------------------------")
+            
+            choice = input(">> 원하는 메뉴 번호를 선택하세요: ").strip()
+
+            if choice == '1':
+                self.add_ingredient()
+            elif choice == '2':
+                self.reset_ingredients()
+            elif choice == '3':
+                self.show_recommendations()
+            elif choice == '4':
+                print("\n프로그램을 종료합니다. 맛있는 식사 되세요! 🍽️")
+                sys.exit()
+            else:
+                print("\n잘못된 입력입니다. 1~4 사이의 숫자를 입력해주세요.")
+                input("\n계속하려면 엔터를 누르세요...")
 
 # ==========================================
-# 5. 테스트 실행
+# 6. 실행부
 # ==========================================
 if __name__ == "__main__":
-    # 테스트용: 기존의 단순 수량 방식과 새로운 유통기한 방식 모두 호환 가능
-    my_fridge = {
-        "스파게티면": {"quantity": 200, "days_left": 10},
-        "토마토소스": {"quantity": 150, "days_left": 3},
-        "초콜릿": {"quantity": 10, "days_left": 30} # 제외되는 재료 테스트
-    }
-
-    results = recommend_by_user_input(my_fridge, top_n=3)
-
-    print("-" * 40)
-    for rank, (recipe, score) in enumerate(results, start=1):
-        print(f"{rank}위: {recipe} (매칭 점수: {score:.2f})")
+    app = RecipeRecommenderCLI()
+    app.run()
