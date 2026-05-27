@@ -7,7 +7,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from datetime import datetime
 
 # ==========================================
-# 1. 기준 재료 리스트
+# 1. 기준 재료 리스트들
 # ==========================================
 INGREDIENTS = [
     "김치",
