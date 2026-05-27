@@ -31,7 +31,7 @@ RAW_RECIPES = {
 # ==========================================
 # 3. RecipeScorer 클래스 (사용자 가중치 로직)
 # ==========================================
-class RecipeScorer:
+class RecipeScorer:  # 가중치 계산
     def __init__(self):
         self.w_expiration = 0.5  # 유통기한 임박 우선
         self.w_quantity = 0.3    # 재료 소모량 우선
@@ -41,7 +41,7 @@ class RecipeScorer:
         expire_score = 0
         quantity_score = 0
         match_count = 0
-        
+        flag=0
         required_ingredients = list(recipe_ingredients.keys())
         total_required = len(required_ingredients)
 
