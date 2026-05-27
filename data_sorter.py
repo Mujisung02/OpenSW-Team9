@@ -11,7 +11,6 @@ def process_ingredients(raw_inputs):
     for item in raw_inputs:
         name = item['name']
         date_str = item['expire_date']
-        # 숫자로 바로 들어오든, "200g"처럼 문자로 들어오든 처리할 수 있게 문자열로 일단 변환
         amount_str = str(item['amount']) 
         
         # 1. 유통기한 D-Day 계산
@@ -38,12 +37,16 @@ def process_ingredients(raw_inputs):
 
 def get_fridge_dict_for_main(sorted_list):
     """
-    정렬된 리스트를 메인 파일(recommend_by_user_input)에 
-    바로 넣을 수 있는 {재료명: 수량} 딕셔너리 형태로 변환합니다.
+    정렬된 리스트를 메인 파일 구조에 맞게
+    {재료명: {'quantity': 수량, 'days_left': D-Day}} 형태로 변환합니다.
     """
     fridge_dict = {}
     for item in sorted_list:
-        fridge_dict[item['name']] = item['amount_num']
+        # 💡 팀원의 RecipeScorer가 요구하는 키 이름(quantity, days_left)에 정확히 맞춤!
+        fridge_dict[item['name']] = {
+            "quantity": item['amount_num'],
+            "days_left": item['d_day']
+        }
     return fridge_dict
 
 
@@ -53,21 +56,16 @@ def get_fridge_dict_for_main(sorted_list):
 if __name__ == "__main__":
     print("=== 정렬 및 데이터 변환 테스트 시작 ===\n")
 
-    # 1. 4번 팀원이 넘겨줄 가짜 입력 데이터 (UI 입력창에서 왔다고 가정)
+    # 4번 팀원이 넘겨줄 가짜 입력 데이터
     dummy_ui_input = [
         {"name": "돼지고기", "expire_date": "2026-05-30", "amount": "600g"},
         {"name": "양파", "expire_date": "2026-05-20", "amount": "200"},
         {"name": "대파", "expire_date": "2026-05-18", "amount": "100g"}
     ]
 
-    # 2. 내 함수 실행 (D-Day 계산 및 정렬)
+    # 함수 실행
     sorted_detailed_list = process_ingredients(dummy_ui_input)
-    
-    print("[1단계] 상세 정렬 데이터 (D-Day 계산 완료):")
-    print(json.dumps(sorted_detailed_list, indent=4, ensure_ascii=False))
-
-    # 3. 메인 함수용 딕셔너리로 변환
     final_fridge_dict = get_fridge_dict_for_main(sorted_detailed_list)
 
-    print("\n[2단계] 팀장 메인 함수에 들어갈 최종 딕셔너리:")
+    print("팀장/팀원 메인 함수에 들어갈 최종 딕셔너리 포맷:")
     print(json.dumps(final_fridge_dict, indent=4, ensure_ascii=False))
