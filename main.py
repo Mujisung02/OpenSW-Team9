@@ -29,9 +29,54 @@ RAW_RECIPES = {
 }
 
 # ==========================================
-# 3. RecipeScorer 클래스 (사용자 가중치 로직)
+# 3. 데이터 정렬 및 변환 모듈
 # ==========================================
-class RecipeScorer:  # 가중치 계산
+def process_ingredients(raw_inputs):
+    """UI에서 받은 raw 데이터를 정제하고 유통기한 순으로 정렬합니다."""
+    processed_list = []
+    today = datetime.now() 
+
+    for item in raw_inputs:
+        name = item['name']
+        date_str = item['expire_date']
+        amount_str = str(item['amount']) 
+        
+        # 1. 유통기한 D-Day 계산
+        expire_date = datetime.strptime(date_str, "%Y-%m-%d")
+        d_day = (expire_date - today).days
+        
+        # 2. 숫자(수량)만 분리하여 실수(float)로 변환
+        amount_num_str = ''.join(filter(lambda x: x.isdigit() or x == '.', amount_str))
+        amount_num = float(amount_num_str) if amount_num_str else 0.0
+        
+        # 3. 딕셔너리로 구조화
+        ingredient_data = {
+            'name': name,
+            'expire_date': date_str,
+            'd_day': d_day,
+            'amount_num': amount_num
+        }
+        processed_list.append(ingredient_data)
+    
+    # 4. 유통기한(d_day)이 임박한 순으로 정렬!
+    processed_list.sort(key=lambda x: x['d_day'])
+    
+    return processed_list
+
+def get_fridge_dict_for_main(sorted_list):
+    """정렬된 리스트를 메인 추천 함수의 규격에 맞게 변환합니다."""
+    fridge_dict = {}
+    for item in sorted_list:
+        fridge_dict[item['name']] = {
+            "quantity": item['amount_num'],
+            "days_left": item['d_day']
+        }
+    return fridge_dict
+
+# ==========================================
+# 4. RecipeScorer 클래스 (사용자 가중치 로직)
+# ==========================================
+class RecipeScorer:
     def __init__(self):
         self.w_expiration = 0.5  # 유통기한 임박 우선
         self.w_quantity = 0.3    # 재료 소모량 우선
@@ -41,15 +86,13 @@ class RecipeScorer:  # 가중치 계산
         expire_score = 0
         quantity_score = 0
         match_count = 0
-        flag=0
+        
         required_ingredients = list(recipe_ingredients.keys())
         total_required = len(required_ingredients)
 
         for ing in required_ingredients:
             if ing in user_inventory:
                 match_count += 1
-                
-                # 기존 데이터(숫자)와 새 데이터(딕셔너리) 모두 호환되도록 처리
                 ing_info = user_inventory[ing]
                 if isinstance(ing_info, dict):
                     qty = ing_info.get('quantity', 0)
@@ -58,11 +101,9 @@ class RecipeScorer:  # 가중치 계산
                     qty = ing_info
                     days_left = 999
                 
-                # 유통기한 점수: 7일 이내면 점수 부여
                 if days_left <= 7:
                     expire_score += (8 - days_left) / 7 
                 
-                # 재료 소모 점수 (10개를 만점으로 가정)
                 quantity_score += qty / 10
 
         match_rate = match_count / total_required
@@ -75,12 +116,11 @@ class RecipeScorer:  # 가중치 계산
         return round(total_score, 2)
 
 # ==========================================
-# 4. 사용자 직접 입력 처리 및 추천 함수
+# 5. 사용자 직접 입력 처리 및 추천 함수
 # ==========================================
 def recommend_by_user_input(user_fridge_dict, top_n=3):
     user_vector = np.zeros(len(INGREDIENTS))
 
-    # 사용자 입력 매핑
     for ing_name, amount in user_fridge_dict.items():
         if ing_name in INGREDIENTS:
             idx = INGREDIENTS.index(ing_name)
@@ -89,7 +129,6 @@ def recommend_by_user_input(user_fridge_dict, top_n=3):
         else:
             print(f"안내: '{ing_name}'은(는) 추천 기준 재료가 아니므로 비율 계산에서 제외됩니다.")
 
-    # 비율(가중치) 벡터로 변환
     total_amount = np.sum(user_vector)
     if total_amount == 0:
         print("냉장고에 입력된 유효한 핵심 재료가 없습니다.")
@@ -103,7 +142,6 @@ def recommend_by_user_input(user_fridge_dict, top_n=3):
         if ratio > 0:
             print(f"- {INGREDIENTS[idx]}: {ratio*100:.1f}%")
 
-    # 가중치 점수 계산 (RecipeScorer)
     scorer = RecipeScorer()
     results = []
     
@@ -111,7 +149,6 @@ def recommend_by_user_input(user_fridge_dict, top_n=3):
         score = scorer.calculate_score(recipe_name, ing_dict, user_fridge_dict)
         results.append((recipe_name, score))
 
-    # 결과 정렬
     results.sort(key=lambda x: x[1], reverse=True)
     top_recommendations = results[:top_n]
 
@@ -119,7 +156,7 @@ def recommend_by_user_input(user_fridge_dict, top_n=3):
     return top_recommendations
 
 # ==========================================
-# 5. 인터페이스 (UI) 클래스 구현
+# 6. 인터페이스 (UI) 클래스 구현
 # ==========================================
 class RecipeRecommenderCLI:
     def __init__(self):
@@ -130,7 +167,7 @@ class RecipeRecommenderCLI:
 
     def display_header(self):
         print("========================================")
-        print("      🍳 냉장고 파먹기 레시피 추천 🍳      ")
+        print("     🍳 냉장고 파먹기 레시피 추천 🍳      ")
         print("========================================")
         print("[현재 냉장고 속 재료]")
         
@@ -188,32 +225,25 @@ class RecipeRecommenderCLI:
             input("\n계속하려면 엔터를 누르세요...")
             return
 
-        parsed_fridge = {}
-        today = datetime.now()
-
+        # ---------------------------------------------------------
+        # 여기서부터 질문자님의 함수를 활용하는 구간입니다.
+        # ---------------------------------------------------------
+        raw_list_for_sorter = []
         for name, info in self.user_ingredients.items():
-            # 1. 수량 파싱 (정규식으로 숫자 추출)
-            amount_str = info['amount']
-            numbers = re.findall(r'\d+\.?\d*', amount_str)
-            qty = float(numbers[0]) if numbers else 1.0
-            
-            # 2. 유통기한 파싱 및 남은 일수(days_left) 계산
-            exp_date_str = info['exp_date']
-            if exp_date_str == "기한 없음":
-                days_left = 999
-            else:
-                try:
-                    exp_date_obj = datetime.strptime(exp_date_str, "%Y-%m-%d")
-                    delta = exp_date_obj - today
-                    days_left = delta.days
-                except ValueError:
-                    days_left = 999
-                    
-            # 3. 새로운 로직에 맞는 딕셔너리 형태로 저장
-            parsed_fridge[name] = {
-                "quantity": qty,
-                "days_left": days_left
-            }
+            exp_date = info['exp_date']
+            if exp_date == "기한 없음":
+                exp_date = "2099-12-31" # 계산을 위해 임의의 먼 미래 날짜 세팅
+                
+            raw_list_for_sorter.append({
+                "name": name,
+                "amount": info['amount'],
+                "expire_date": exp_date
+            })
+
+        # 내 정렬 모듈 직접 실행 (단일 파일 내부 함수 호출)
+        sorted_list = process_ingredients(raw_list_for_sorter)
+        parsed_fridge = get_fridge_dict_for_main(sorted_list)
+        # ---------------------------------------------------------
 
         # 추천 로직 호출
         results = recommend_by_user_input(parsed_fridge, top_n=3)
@@ -252,7 +282,7 @@ class RecipeRecommenderCLI:
                 input("\n계속하려면 엔터를 누르세요...")
 
 # ==========================================
-# 6. 실행부
+# 7. 실행부
 # ==========================================
 if __name__ == "__main__":
     app = RecipeRecommenderCLI()
