@@ -32,7 +32,15 @@ RAW_RECIPES = {
 # 3. 데이터 정렬 및 변환 모듈
 # ==========================================
 def process_ingredients(raw_inputs):
-    """UI에서 받은 raw 데이터를 정제하고 유통기한 순으로 정렬합니다."""
+    """
+    UI 모듈에서 전달받은 원시(raw) 재료 데이터를 정제하고, 유통기한(D-Day)이 임박한 순으로 정렬합니다.
+
+    Args:
+        raw_inputs (list): [{'name': '김치', 'amount': '500g', 'expire_date': '2026-05-30'}, ...] 형태의 리스트
+
+    Returns:
+        list: D-Day 계산 및 수량 파싱이 완료되고, 유통기한 오름차순으로 정렬된 딕셔너리 리스트
+    """
     processed_list = []
     today = datetime.now() 
 
@@ -42,14 +50,16 @@ def process_ingredients(raw_inputs):
         amount_str = str(item['amount']) 
         
         # 1. 유통기한 D-Day 계산
+        # 입력된 날짜 문자열을 datetime 객체로 변환하여 오늘 날짜와의 차이(일수)를 계산합니다.
         expire_date = datetime.strptime(date_str, "%Y-%m-%d")
         d_day = (expire_date - today).days
         
-        # 2. 숫자(수량)만 분리하여 실수(float)로 변환
+        # 2. 수량 데이터 정제 (문자열 -> 실수형)
+        # 사용자가 "500g", "1.5개" 등으로 입력했을 경우를 대비해, filter를 사용하여 숫자와 소수점만 안전하게 추출합니다.
         amount_num_str = ''.join(filter(lambda x: x.isdigit() or x == '.', amount_str))
         amount_num = float(amount_num_str) if amount_num_str else 0.0
         
-        # 3. 딕셔너리로 구조화
+        # 3. 계산된 데이터를 내부 처리용 딕셔너리 구조로 묶기
         ingredient_data = {
             'name': name,
             'expire_date': date_str,
@@ -58,13 +68,22 @@ def process_ingredients(raw_inputs):
         }
         processed_list.append(ingredient_data)
     
-    # 4. 유통기한(d_day)이 임박한 순으로 정렬!
+    # 4. 유통기한(d_day)이 임박한 순(오름차순)으로 리스트 정렬
     processed_list.sort(key=lambda x: x['d_day'])
     
     return processed_list
 
+
 def get_fridge_dict_for_main(sorted_list):
-    """정렬된 리스트를 메인 추천 함수의 규격에 맞게 변환합니다."""
+    """
+    정렬이 완료된 리스트를 가중치 계산(RecipeScorer) 모듈이 요구하는 중첩 딕셔너리 규격으로 변환합니다.
+
+    Args:
+        sorted_list (list): process_ingredients()를 거쳐 정렬된 리스트
+
+    Returns:
+        dict: {'재료명': {'quantity': 수량, 'days_left': 남은기간}} 형태의 최종 딕셔너리
+    """
     fridge_dict = {}
     for item in sorted_list:
         fridge_dict[item['name']] = {
