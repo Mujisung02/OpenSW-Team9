@@ -78,22 +78,28 @@ def get_fridge_dict_for_main(sorted_list):
 # ==========================================
 class RecipeScorer:
     def __init__(self):
+        # 항목별 평가 가중치 설정
         self.w_expiration = 0.5  # 유통기한 임박 우선
         self.w_quantity = 0.3    # 재료 소모량 우선
         self.w_match_rate = 0.2  # 레시피 매칭률 우선
 
     def calculate_score(self, recipe_name, recipe_ingredients, user_inventory):
+        # 평가 점수 초기화
         expire_score = 0
         quantity_score = 0
         match_count = 0
         
+        # 레시피에 필요한 재료 목록과 총 개수 확인
         required_ingredients = list(recipe_ingredients.keys())
         total_required = len(required_ingredients)
 
         for ing in required_ingredients:
+            # 1. 보유 재료 확인: 사용자의 인벤토리에 필요한 재료가 있는지 체크
             if ing in user_inventory:
                 match_count += 1
                 ing_info = user_inventory[ing]
+                
+                # 데이터 타입에 따라 수량(qty)과 남은 유통기한(days_left) 추출
                 if isinstance(ing_info, dict):
                     qty = ing_info.get('quantity', 0)
                     days_left = ing_info.get('days_left', 999)
@@ -101,20 +107,25 @@ class RecipeScorer:
                     qty = ing_info
                     days_left = 999
                 
+                # 2. 유통기한 점수 계산: 7일 이하로 남은 경우, 임박할수록 더 높은 점수 부여
                 if days_left <= 7:
                     expire_score += (8 - days_left) / 7 
                 
+                # 3. 수량 점수 계산: 보유 수량이 많을수록 더 높은 점수 부여
                 quantity_score += qty / 10
 
+        # 4. 매칭률 계산: (보유한 필요 재료 수 / 전체 필요 재료 수)
         match_rate = match_count / total_required
 
+        # 5. 최종 점수 산출: 각 항목의 점수에 가중치를 곱하여 합산
         total_score = (
             (expire_score * self.w_expiration) +
             (quantity_score * self.w_quantity) +
             (match_rate * self.w_match_rate)
         )
+        
+        # 결과를 소수점 둘째 자리까지 반올림하여 반환
         return round(total_score, 2)
-
 # ==========================================
 # 5. 사용자 직접 입력 처리 및 추천 함수
 # ==========================================
@@ -155,10 +166,6 @@ def recommend_by_user_input(user_fridge_dict, top_n=3):
     print(f"\n==== 맞춤 레시피 추천 TOP {top_n} ====")
     return top_recommendations
 
-import os
-import sys
-from datetime import datetime
-
 # ==========================================
 # 6. 인터페이스 (UI) 클래스 구현
 # ==========================================
@@ -169,8 +176,6 @@ class RecipeRecommenderCLI:
     """
     
     def __init__(self):
-        # 사용자가 입력한 냉장고 재료 데이터를 저장할 딕셔너리 초기화
-        # 구조: { "재료명": {"amount": "수량", "exp_date": "유통기한"} }
         self.user_ingredients = {}
 
     def clear_screen(self):
