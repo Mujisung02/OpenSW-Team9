@@ -189,7 +189,7 @@ class RecipeRecommenderCLI:
             if not name:
                 break
                 
-            amount = input("2. 양 (예: 500g, 2개): ").strip()
+            amount = input("2. 양 (예: 500g 등 gram 단위 기준으로 정확히 입력해 주세요): ").strip()
             if not amount:
                 amount = "모름"
                 
