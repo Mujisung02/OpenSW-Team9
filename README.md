@@ -29,8 +29,7 @@
 ## ⚙️ 설치 및 실행 방법
 1. 이 저장소를 로컬 환경으로 클론(Clone)합니다.
 ```bash
-git clone [https://github.com/myeong-chan/fridge-recipe-recommender.git](https://github.com/myeong-chan/fridge-recipe-recommender.git)
-cd fridge-recipe-recommender
+https://github.com/Mujisung02/OpenSW-Team9.git
 ```
 2. 프로젝트 실행에 필요한 파이썬 패키지를 설치합니다
 ```bash
